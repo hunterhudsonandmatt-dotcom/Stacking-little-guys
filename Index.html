@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Stacking Guys Mobile Edition</title>
+<style>
+  body { margin: 0; background: #87CEEB; overflow: hidden; user-select: none; }
+  canvas { display: block; margin: auto; background: #c0ffc0; touch-action: none; }
+
+  /* Mobile controls */
+  #controls {
+    position: fixed;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+  }
+  .btn {
+    width: 60px;
+    height: 60px;
+    background: #555;
+    color: white;
+    border-radius: 10px;
+    font-size: 20px;
+    text-align: center;
+    line-height: 60px;
+    user-select: none;
+    touch-action: manipulation;
+  }
+  .btn:active { background: #777; }
+</style>
+</head>
+<body>
+<canvas id="game" width="800" height="400"></canvas>
+
+<!-- Mobile controls -->
+<div id="controls">
+  <div class="btn" id="left">⬅️</div>
+  <div class="btn" id="right">➡️</div>
+  <div class="btn" id="jump">⤒</div>
+</div>
+
+<script>
+const canvas = document.getElementById("game");
+const ctx = canvas.getContext("2d");
+
+let keys = {};
+document.addEventListener("keydown", e => keys[e.key] = true);
+document.addEventListener("keyup", e => keys[e.key] = false);
+
+// Mobile button support
+const leftBtn = document.getElementById("left");
+const rightBtn = document.getElementById("right");
+const jumpBtn = document.getElementById("jump");
+
+let touchKeys = { left:false, right:false, jump:false };
+function bindButton(btn, key) {
+  btn.addEventListener("touchstart", e => { e.preventDefault(); touchKeys[key] = true; });
+  btn.addEventListener("touchend", e => { e.preventDefault(); touchKeys[key] = false; });
+}
+bindButton(leftBtn, "left");
+bindButton(rightBtn, "right");
+bindButton(jumpBtn, "jump");
+
+class Guy {
+  constructor(x, y, color="red", stacked=false, moving=false, unstable=false) {
+    this.x = x; this.y = y;
+    this.width = 30; this.height = 40;
+    this.color = color;
+    this.velY = 0;
+    this.onGround = false;
+    this.stacked = stacked;
+    this.moving = moving;
+    this.moveDir = 1;
+    this.unstable = unstable;
+    this.jumpTimer = Math.random() * 100;
+  }
+
+  draw() {
+    ctx.fillStyle = this.color;
+    ctx.fillRect(this.x, this.y, this.width, this.height);
+
+    // Eyes
+    ctx.fillStyle = "white";
+    ctx.beginPath();
+    ctx.ellipse(this.x + 10, this.y + 15, 7, 9, 0, 0, Math.PI*2);
+    ctx.fill();
+    ctx.beginPath();
+    ctx.ellipse(this.x + 20, this.y + 15, 7, 9, 0, 0, Math.PI*2);
+    ctx.fill();
+
+    ctx.fillStyle = "black";
+    if (this.unstable) {
+      ctx.beginPath(); ctx.arc(this.x+10, this.y+15, 2, 0, Math.PI*2); ctx.stroke();
+      ctx.beginPath(); ctx.arc(this.x+20, this.y+15, 2, 0, Math.PI*2); ctx.stroke();
+    } else {
+      ctx.beginPath(); ctx.arc(this.x+10, this.y+15, 2, 0, Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(this.x+20, this.y+15, 2, 0, Math.PI*2); ctx.fill();
+    }
+  }
+
+  update() {
+    let moveLeft = keys["ArrowLeft"] || touchKeys.left;
+    let moveRight = keys["ArrowRight"] || touchKeys.right;
+    let jump = keys[" "] || touchKeys.jump;
+
+    if (!this.stacked) {
+      if (moveLeft) this.x -= 3;
+      if (moveRight) this.x += 3;
+      if (jump && this.onGround) { this.velY = -8; this.onGround = false; }
+    }
+
+    if (this.unstable) {
+      this.jumpTimer++;
+      if (this.jumpTimer > 100) {
+        if (this.onGround) {
+          this.velY = -7 - Math.random()*2;
+          this.onGround = false;
+        }
+        this.jumpTimer = 0;
+      }
+    }
+
+    this.velY += 0.4;
+    this.y += this.velY;
+
+    if (this.y + this.height > 350) {
+      this.y = 350 - this.height;
+      this.velY = 0;
+      this.onGround = true;
+    }
+
+    if (this.moving) {
+      this.x += this.moveDir * 2;
+      if (this.x < 100 || this.x > 700) this.moveDir *= -1;
+    }
+  }
+}
+
+class SpikeGuy {
+  constructor(x, y) {
+    this.x = x; this.y = y;
+    this.width = 40; this.height = 40;
+    this.moveDir = 1;
+  }
+
+  update() {
+    this.x += this.moveDir * 2.5;
+    if (this.x < 200 || this.x > 700) this.moveDir *= -1;
+  }
+
+  draw() {
+    // Draw triangle body
+    ctx.fillStyle = "gray";
+    ctx.beginPath();
+    ctx.moveTo(this.x + this.width/2, this.y);
+    ctx.lineTo(this.x, this.y + this.height);
+    ctx.lineTo(this.x + this.width, this.y + this.height);
+    ctx.closePath();
+    ctx.fill();
+    // Eyes
+    ctx.fillStyle = "white";
+    ctx.beginPath(); ctx.ellipse(this.x+15, this.y+25, 5,7,0,0,Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(this.x+25, this.y+25, 5,7,0,0,Math.PI*2); ctx.fill();
+    ctx.fillStyle = "black";
+    ctx.beginPath(); ctx.arc(this.x+15, this.y+25, 2, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(this.x+25, this.y+25, 2, 0, Math.PI*2); ctx.fill();
+  }
+}
+
+let level = 1, player, guys, goal, spikes, pit, spikeGuys;
+let stackedCount = 0, goalRequired = 0, gameRunning = true;
+let stackSound = new Audio("https://actions.google.com/sounds/v1/cartoon/pop.ogg");
+
+function loadLevel(num) {
+  level = num;
+  stackedCount = 0;
+  gameRunning = true;
+
+  if (level === 1) {
+    player = new Guy(100, 300, "red");
+    guys = [
+      player,
+      new Guy(300, 310, "orange", true),
+      new Guy(500, 310, "yellow", true)
+    ];
+    goal = { x: 700, y: 280, width: 40, height: 70 };
+    spikes = [];
+    spikeGuys = [];
+    pit = null;
+    goalRequired = 0;
+  } else {
+    player = new Guy(100, 300, "red");
+    guys = [
+      player,
+      new Guy(300, 310, "orange", true),
+      new Guy(500, 310, "yellow", true, true),
+      new Guy(600, 310, "green", true, false, true)
+    ];
+    goal = { x: 730, y: 280, width: 40, height: 70 };
+    spikes = [];
+    spikeGuys = [
+      new SpikeGuy(400, 310),
+      new SpikeGuy(550, 310)
+    ];
+    pit = { x: 200, y: 350, width: 60, height: 50 };
+    goalRequired = 2;
+  }
+}
+
+function checkStack() {
+  guys.forEach(g => {
+    if (g !== player && player.x < g.x + g.width &&
+        player.x + player.width > g.x &&
+        player.y + player.height > g.y &&
+        player.y + player.height < g.y + 20 &&
+        g.velY >= 0) {
+      player.y = g.y - player.height;
+      player.velY = 0;
+      player.onGround = true;
+      if (g.color !== "gray" && !g.unstable) {
+        stackedCount++;
+        g.color = "gray";
+        stackSound.play();
+      }
+    }
+  });
+}
+
+function checkObstacles() {
+  spikeGuys.forEach(s => {
+    if (player.x < s.x + s.width && player.x + player.width > s.x &&
+        player.y + player.height > s.y && player.y < s.y + s.height) {
+      resetLevel("Ouch! Spike Guy got you!");
+    }
+  });
+  if (pit && player.x > pit.x && player.x < pit.x + pit.width && player.y > 345)
+    resetLevel("You fell in a pit!");
+}
+
+function checkGoal() {
+  if (player.x + player.width > goal.x && player.y + player.height > goal.y) {
+    if (level === 1 || stackedCount >= goalRequired) {
+      ctx.fillStyle = "black";
+      ctx.font = "30px Arial";
+      ctx.fillText("Level Complete!", 300, 200);
+      gameRunning = false;
+      setTimeout(() => {
+        if (level === 1) loadLevel(2);
+        else {
+          alert("You beat all levels!");
+          loadLevel(1);
+        }
+      }, 1500);
+    }
+  }
+}
+
+function resetLevel(msg) {
+  alert(msg);
+  loadLevel(level);
+}
+
+function drawUI() {
+  ctx.fillStyle = "black";
+  ctx.font = "16px Arial";
+  ctx.fillText("Level: " + level, 10, 20);
+  if (level > 1) ctx.fillText("Stacks: " + stackedCount + " / " + goalRequired, 10, 40);
+}
+
+function loop() {
+  if (!gameRunning) return;
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+  ctx.fillStyle = "#228B22";
+  ctx.fillRect(0, 350, canvas.width, 50);
+
+  if (pit) {
+    ctx.fillStyle = "#654321";
+    ctx.fillRect(pit.x, pit.y, pit.width, pit.height);
+  }
+
+  ctx.fillStyle = (level === 1 || stackedCount >= goalRequired) ? "gold" : "silver";
+  ctx.fillRect(goal.x, goal.y, goal.width, goal.height);
+
+  guys.forEach(g => { g.update(); g.draw(); });
+  spikeGuys.forEach(s => { s.update(); s.draw(); });
+
+  checkStack();
+  checkObstacles();
+  checkGoal();
+  drawUI();
+
+  requestAnimationFrame(loop);
+}
+
+loadLevel(1);
+loop();
+</script>
+</body>
+</html>
